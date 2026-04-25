@@ -1,0 +1,79 @@
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.optimize import minimize
+
+# --- Simulate decision-making data ---
+def simulate_data(n_trials=100, true_alpha=0.2, true_beta=3.0):
+    rewards = [0, 1]  # binary reward environment
+    q_values = np.zeros(2)  # expected value of each action
+    
+    choices = []
+    outcomes = []
+    
+    for t in range(n_trials):
+        # softmax: converts values into probabilities
+        probs = np.exp(true_beta * q_values) / np.sum(np.exp(true_beta * q_values))
+        
+        choice = np.random.choice([0, 1], p=probs)
+        reward = np.random.choice(rewards) if choice == 1 else 0
+        
+        # update rule: prediction error learning
+        q_values[choice] += true_alpha * (reward - q_values[choice])
+        
+        choices.append(choice)
+        outcomes.append(reward)
+    
+    return np.array(choices), np.array(outcomes)
+
+
+# --- Negative log likelihood ---
+def neg_log_likelihood(params, choices, rewards):
+    alpha, beta = params
+    
+    # keep parameters in valid range
+    if not (0 <= alpha <= 1 and beta > 0):
+        return np.inf
+    
+    q_values = np.zeros(2)
+    log_lik = 0
+    
+    for c, r in zip(choices, rewards):
+        probs = np.exp(beta * q_values) / np.sum(np.exp(beta * q_values))
+        
+        log_lik += np.log(probs[c] + 1e-10)  # avoid log(0)
+        
+        # learning update
+        q_values[c] += alpha * (r - q_values[c])
+    
+    return -log_lik
+
+
+# --- Fit model ---
+def fit_model(choices, rewards):
+    result = minimize(
+        neg_log_likelihood,
+        x0=[0.5, 1.0],
+        args=(choices, rewards),
+        bounds=[(0, 1), (0.01, 10)]
+    )
+    return result.x
+
+
+# --- Run everything ---
+if __name__ == "__main__":
+    np.random.seed(42)
+    
+    choices, rewards = simulate_data()
+    
+    est_alpha, est_beta = fit_model(choices, rewards)
+    
+    print("Estimated alpha:", round(est_alpha, 3))
+    print("Estimated beta:", round(est_beta, 3))
+    print("Average reward:", round(np.mean(rewards), 3))
+    
+    # Plot behavior
+    plt.plot(rewards, label="Rewards")
+    plt.plot(choices, label="Choices", alpha=0.7)
+    plt.legend()
+    plt.title("Simulated Decision Behavior")
+    plt.show()
